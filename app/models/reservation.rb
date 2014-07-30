@@ -1,29 +1,26 @@
 class Reservation < ActiveRecord::Base
-  
-  validates :table, presence: true
-  validates :start, presence: true
-  validates :finish, presence: true
 
-  
+  validates_presence_of :table, :start, :finish
+
   validate :checking_the_time, :uniqueness_reservation
 
+  scope :tables, ->(table) { where(table: table) }
+
+  private
+
   def checking_the_time
-    if start > finish || finish.to_date != start.to_date
-      errors.add(:finish, "Invalid time range")
-    end
+    errors.add(:finish, :checking_the_time) if start >= finish
   end
 
   def uniqueness_reservation
-    unless Reservation.where("'reservations'.'table' = :t 
-    	                      AND ((start >= :s AND finish <= :f) 
-    	                      OR (start >= :s AND start <= :f AND finish >= :f)
-    	                      OR (start <= :s AND start <= :f AND finish >= :s AND finish >= :f)
-    	                      OR (start <= :s AND finish >= :s AND finish <= :f)
-    	                      )",
-                             {t: table, s: start, f: finish}).empty?
-      errors.add(:booked_from, 'Invalid period.')
+    unless Reservation.diapazone(start, finish).tables(table)
+                      .where.not(id: id).empty?
+      errors.add(:finish, :uniqueness_reservation)
     end
   end
 
-
+  def self.diapazone(start, finish)
+    where("(start >= :s AND finish <= :f) OR (start <= :s AND finish >= :s)
+             OR (start <= :f AND finish >= :f)", s: start, f: finish)
+  end
 end
